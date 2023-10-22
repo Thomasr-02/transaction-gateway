@@ -1,0 +1,6 @@
+com/transactiongateway/entity/Transaction.class
+com/transactiongateway/service/TransactionService.class
+com/transactiongateway/service/TransactionServiceImpl.class
+com/transactiongateway/controller/TransactionController.class
+com/transactiongateway/repository/TransactionRepository.class
+com/transactiongateway/TransactionGatewayApplication.class
