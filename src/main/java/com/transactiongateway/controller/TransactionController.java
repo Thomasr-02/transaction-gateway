@@ -24,8 +24,13 @@ public class TransactionController {
     private TransactionServiceImpl service;
 
     @GetMapping
-    public ResponseEntity<List<Transaction>> getAll(){
+    public ResponseEntity<List<Transaction>> findAll(){
         return new ResponseEntity<List<Transaction>>(this.service.findAll(), HttpStatus.OK);
+    }
+
+    @GetMapping(path = "/{id}")
+    public ResponseEntity<Transaction> findById(@PathVariable final String id){
+        return new ResponseEntity<Transaction>(this.service.findById(id), HttpStatus.OK);
     }
 
     @PostMapping

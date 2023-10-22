@@ -19,6 +19,10 @@ public class TransactionServiceImpl implements TransactionService {
         return repository.findAll();
     }
 
+    public Transaction findById(String id) {
+        return repository.findById(id);
+    }
+
     public void save(Transaction transaction){
        repository.save(transaction);
     }

@@ -7,5 +7,7 @@ import java.util.List;
 
 public interface TransactionRepository  extends JpaRepository<Transaction, Long> {
     List<Transaction> findAll();
+
+    Transaction findById(String id);
     Transaction save(Transaction transaction);
 }
