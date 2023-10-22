@@ -35,6 +35,8 @@ public class Transaction implements Serializable {
     @DecimalMax(value = "9999999.99", message = "Purchase amount is too large")
     private BigDecimal purchaseAmount;
 
+    private BigDecimal purchaseAmountConverted;
+
     @PrePersist
     public void prePersist() {
         if (transactionDate == null) {
