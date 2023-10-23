@@ -1,16 +1,16 @@
 package com.transactiongateway.service;
 
+import com.transactiongateway.dto.TransactionRequest;
 import com.transactiongateway.entity.Transaction;
+import com.transactiongateway.exception.TransactionNotFoundException;
 import com.transactiongateway.repository.TransactionRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.logging.Logger;
 
 @Service
 public class TransactionServiceImpl implements TransactionService {
-
     @Autowired
     TransactionRepository repository;
 
@@ -19,11 +19,18 @@ public class TransactionServiceImpl implements TransactionService {
         return repository.findAll();
     }
 
-    public Transaction findById(String id) {
-        return repository.findById(id);
+    public Transaction findById(String id) throws TransactionNotFoundException {
+        Transaction transaction = repository.findById(id);
+        if(transaction == null){
+            throw new TransactionNotFoundException("Transaction ID does not exists!");
+        }
+        return transaction;
     }
 
-    public void save(Transaction transaction){
-       repository.save(transaction);
+    public Transaction save(TransactionRequest transactionRequest){
+        Transaction transaction = new Transaction();
+        transaction.setPurchaseAmount(transactionRequest.getPurchaseAmount());
+        transaction.setDescription(transactionRequest.getDescription());
+        return repository.save(transaction);
     }
 }

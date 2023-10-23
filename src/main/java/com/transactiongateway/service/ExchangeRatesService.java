@@ -2,8 +2,9 @@ package com.transactiongateway.service;
 
 import com.transactiongateway.entity.ExchangeRatesResponse;
 import com.transactiongateway.entity.Transaction;
-import com.transactiongateway.exception.ExchangeRateNotFoundException;
+import com.transactiongateway.exception.ExchangeRateConvertCurrencyException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
@@ -18,31 +19,56 @@ import java.util.List;
 
 @Service
 public class ExchangeRatesService {
+    private static final String API_URL = "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/accounting/od/rates_of_exchange";
 
     @Autowired
     private RestTemplate restTemplate;
 
-    private ExchangeRatesResponse fetchExchangeRates(String countryCurrency) {
-        RestTemplate restTemplate = new RestTemplate();
-        String apiUrl = "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/accounting/od/rates_of_exchange?sort=-record_calendar_year,-record_calendar_month,-record_calendar_day&filter=country_currency_desc:eq:" + countryCurrency;
-        try {
-            ResponseEntity<ExchangeRatesResponse> response = restTemplate.getForEntity(apiUrl, ExchangeRatesResponse.class);
 
-            if (response.getStatusCode().is2xxSuccessful()) {
-                return response.getBody();
-            } else {
-                throw new Exception("Failed to retrieve data from the API.");
+    private ExchangeRatesResponse fetchAllExchangeRates(String countryCurrency) {
+        RestTemplate restTemplate = new RestTemplate();
+
+        ResponseEntity<ExchangeRatesResponse> initialResponse = fetchDataForPage(restTemplate, countryCurrency, 1);
+
+        if (initialResponse.getStatusCode().is2xxSuccessful()) {
+            ExchangeRatesResponse initialExchangeRatesResponse = initialResponse.getBody();
+            int totalPages = initialExchangeRatesResponse != null ? initialExchangeRatesResponse.getMeta().getTotal_pages() : 0;
+
+            ExchangeRatesResponse combinedResponse = initialExchangeRatesResponse;
+
+            for (int page = 2; page <= totalPages; page++) {
+                ResponseEntity<ExchangeRatesResponse> pageResponse = fetchDataForPage(restTemplate, countryCurrency, page);
+
+                if (pageResponse.getStatusCode().is2xxSuccessful()) {
+                    ExchangeRatesResponse pageExchangeRatesResponse = pageResponse.getBody();
+                    combinedResponse.getData().addAll(pageExchangeRatesResponse != null ? pageExchangeRatesResponse.getData() : null);
+                } else {
+                    throw new RuntimeException("Failed to retrieve data from the API.");
+                }
             }
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+
+            return combinedResponse;
+        } else {
+            throw new RuntimeException("Failed to retrieve data from the API.");
         }
+    }
+
+    private ResponseEntity<ExchangeRatesResponse> fetchDataForPage(RestTemplate restTemplate, String countryCurrency, int page) {
+        String apiUrl = buildApiUrl(countryCurrency, page);
+        return restTemplate.exchange(apiUrl, HttpMethod.GET, null, ExchangeRatesResponse.class);
+    }
+
+    private String buildApiUrl(String countryCurrency, int page) {
+        return API_URL + "?sort=-record_calendar_year,-record_calendar_month,-record_calendar_day" +
+                "&filter=country_currency_desc:eq:" + countryCurrency +
+                "&page[number]=" + page;
     }
 
     public BigDecimal findExchangeRate(Transaction transaction, String countryCurrency) {
         try {
-            List<ExchangeRatesResponse.ExchangeRateData> exchangeRatesResponse = fetchExchangeRates(countryCurrency).getData();
+            List<ExchangeRatesResponse.ExchangeRateData> exchangeRatesResponse = fetchAllExchangeRates(countryCurrency).getData();
             if(!exchangeRatesResponse.isEmpty()){
-                ExchangeRatesResponse.ExchangeRateData exchangeRate = findAppropriateExchangeRate(exchangeRatesResponse.get(0), transaction.getTransactionDate());
+                ExchangeRatesResponse.ExchangeRateData exchangeRate = findAppropriateExchangeRate(exchangeRatesResponse, transaction.getTransactionDate());
                 return new BigDecimal(exchangeRate.getExchange_rate());
             }
             else {
@@ -59,20 +85,30 @@ public class ExchangeRatesService {
         return convertedAmount;
     }
 
-    private ExchangeRatesResponse.ExchangeRateData findAppropriateExchangeRate(ExchangeRatesResponse.ExchangeRateData exchangeRate, LocalDateTime transactionDate) {
+    public ExchangeRatesResponse.ExchangeRateData findAppropriateExchangeRate(List<ExchangeRatesResponse.ExchangeRateData> exchangeRates, LocalDateTime transactionDate) throws ExchangeRateConvertCurrencyException {
+        ExchangeRatesResponse.ExchangeRateData rateUsed = null;
+        long closestMonthsDifference = Long.MAX_VALUE;
 
-        String recordDateString = exchangeRate.getRecord_date();
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
-        LocalDate recordDate = LocalDate.parse(recordDateString, formatter);
+        for (ExchangeRatesResponse.ExchangeRateData rateData : exchangeRates) {
+            String recordDateString = rateData.getRecord_date();
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+            LocalDate recordDate = LocalDate.parse(recordDateString, formatter);
 
-        LocalDateTime midnightRecordDate = recordDate.atStartOfDay();
+            LocalDateTime midnightRecordDate = recordDate.atStartOfDay();
 
-        long monthsDifference = transactionDate.until(midnightRecordDate, ChronoUnit.MONTHS);
+            long monthsDifference = transactionDate.until(midnightRecordDate, ChronoUnit.MONTHS);
 
-        if (monthsDifference >= 6) {
-            throw new ExchangeRateNotFoundException("Purchase cannot be converted to the target currency.");
+            if (monthsDifference <= 6 && monthsDifference < closestMonthsDifference) {
+                rateUsed = rateData;
+                closestMonthsDifference = monthsDifference;
+            }
         }
-        return exchangeRate;
+
+        if (rateUsed != null) {
+            return rateUsed;
+        } else {
+            throw new ExchangeRateConvertCurrencyException("Purchase cannot be converted to the target currency.");
+        }
     }
 
 }

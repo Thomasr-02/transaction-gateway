@@ -1,5 +1,6 @@
 package com.transactiongateway.repository;
 
+import com.transactiongateway.dto.TransactionRequest;
 import com.transactiongateway.entity.Transaction;
 import org.springframework.data.jpa.repository.JpaRepository;
 
