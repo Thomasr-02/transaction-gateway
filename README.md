@@ -49,8 +49,7 @@ mvn clean package
 ```
 ```bash 
 java -jar target/transaction-gateway-0.0.1-SNAPSHOT.jar
-- ```
-
+```
 
 ## **Features**
 - ### Endpoint to create a new transaction.
@@ -96,7 +95,6 @@ Content-Type: application/json
         "purchaseAmount": 3,
         "timestamp": "2023-10-24T13:45:30Z"
     }
-  // ...
 ]
 ```
 
